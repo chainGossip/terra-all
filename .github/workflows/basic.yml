@@ -1,0 +1,72 @@
+# Based on https://github.com/actions-rs/example/blob/master/.github/workflows/quickstart.yml
+
+on: [ push, pull_request ]
+name: CI
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ env.ACT }}
+        name: Setup to run CI locally
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_12.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+      - uses: actions/checkout@v1
+      - name: ⚡ Cache
+        if: ${{ !env.ACT }}
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo
+            target
+            !target/debug/deps
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - uses: actions-rs/cargo@v1
+        name: Run tests
+        with:
+          command: test
+          args: --all-features --no-fail-fast
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+      - uses: actions-rs/grcov@v0.1
+        name: Generate coverage report
+      - name: Installing htmlq - to parse coverage report
+        run: cargo install htmlq
+      - name: Parse coverage report and print
+        run: |
+          LINE_COV=$(cat coverage/index.html | htmlq "body > div > nav.level > div:nth-child(1) > div > p.title > abbr" --text); echo "line_coverage = $LINE_COV"
+          FUNCTION_COV=$(cat coverage/index.html | htmlq "body > div > nav.level > div:nth-child(2) > div > p.title > abbr" --text); echo "function_coverage = $FUNCTION_COV"
+          BRANCH_COV=$(cat coverage/index.html | htmlq "body > div > nav.level > div:nth-child(3) > div > p.title > abbr" --text); echo "branch_coverage = $BRANCH_COV"
+  lints:
+    name: Lints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.58.1
+          override: true
+          components: rustfmt, clippy
+
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Run cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
