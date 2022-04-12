@@ -294,7 +294,7 @@ fn test_mint_tokens_when_denom_rate_is_zero() {
     assert_eq!(balance, BalanceResponse { balance: amount });
 }
 
-#[test]
+// #[test]
 // fn test_mint_tokens_when_all_rate_is_zero() {
 //     let mut deps = mock_dependencies(&[]);
 
